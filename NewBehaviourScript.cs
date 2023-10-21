@@ -3,10 +3,16 @@ using System.Collections.Generic;
 using UnityEngine;
 using TMPro;
 
-enum FormState
+public enum FormState
 {
     RED, GREEN, BLUE, NONE
 }
+
+enum Lane
+{
+    CENTER, LEFT, RIGHT
+}
+
 
 public class NewBehaviourScript : MonoBehaviour
 {
@@ -44,10 +50,13 @@ public class NewBehaviourScript : MonoBehaviour
     public int score = 0;
     private int MAX_SCORE = 5;
 
-    private int currentLane = 0; // -1L, 0C, 1R
+    private Lane currentLane = Lane.CENTER; // -1L, 0C, 1R
     private FormState currentPower = FormState.NONE;
 
     private bool isShielded = false;
+    private int scoreMultiplier = 1;
+    private int energyMultiplier = 1;
+
 
     void Start()
     {
@@ -55,44 +64,53 @@ public class NewBehaviourScript : MonoBehaviour
         InvokeRepeating("SpawnObject", 0f, spawnInterval);
     }
 
-    public void handleGreenPowerActivation(int scoreAdd, int energyAdd, FormState tokenType)
+    public void handleGreenPowerActivation()
     {
         if (currentPower != FormState.GREEN) return;
-       
-        
-        if(tokenType == FormState.RED)
-        {
-            score = score + (scoreAdd * 5);
-            redScore = redScore + (energyAdd * 2)
-        } else if (tokenType == FormState.BLUE)
-        {
-            score = score + (scoreAdd * 5);
-            blueScore = blueScore + (energyAdd * 2)
-        } else if (tokenType == FormState.GREEN)
-        {
-            score = score + (scoreAdd * 10);
-            greenScore = greenScore + (energyAdd * 2)
-        } else
-        {
-            return;
-        }
+        greenScore--;
+        greenScoreText.text = "Green Score: " + greenScore;
 
+        scoreMultiplier = 5;
+        energyMultiplier = 2;
+
+    }
+
+    public void handleRedPowerActivation()
+    {
+        if (currentPower != FormState.RED) return;
+        redScore--;
+        redScoreText.text = "Red Score: " + redScore;
+
+        GameObject[] obstacles = GameObject.FindGameObjectsWithTag("obstacle");
+
+        foreach (GameObject obj in obstacles)
+        {
+            // if bigger than current transform position
+            if (transform.position.z < obj.transform.position.z)
+            {
+                Destroy(obj);
+            }
+        }
     }
 
     bool AreMaterialsLike(Material material1, Material material2)
     {
-        // Compare shader and main texture
         return material1.shader == material2.shader &&
                material1.mainTexture == material2.mainTexture;
     }
 
-    public Material getRandomMaterial()
+    public string getRandomTag(int index)
+    {
+        string[] tags = { "redToken", "greenToken", "blueToken" };
+        return tags[index];
+    }
+
+    public Material getRandomMaterial(int index)
     {
 
         Material[] materials = { redMaterial, greenMaterial, blueMaterial };
 
-        int randomIndex = Random.Range(0, materials.Length);
-        return materials[randomIndex];
+        return materials[index];
     }
 
     public float getRandomLaneAxis()
@@ -104,8 +122,11 @@ public class NewBehaviourScript : MonoBehaviour
         return laneAxises[randomIndex];
     }
 
-    public void changeForm(GameObject obj, Material material)
+    public void changeForm(GameObject obj, Material material, FormState newForm)
     {
+        currentPower = newForm;
+        energyMultiplier = 1;
+        scoreMultiplier = 1;
         Renderer playerRenderer = obj.GetComponent<Renderer>();
         if (playerRenderer != null)
         {
@@ -124,7 +145,7 @@ public class NewBehaviourScript : MonoBehaviour
                 if (redScore != MAX_SCORE) return;
                 redScore = redScore - 1;
                 currentPower = FormState.RED;
-                changeForm(player, formMaterial);
+                changeForm(player, formMaterial, FormState.RED);
                 isShielded = false;
             }
 
@@ -137,7 +158,7 @@ public class NewBehaviourScript : MonoBehaviour
                 if (greenScore != MAX_SCORE) return;
                 greenScore = greenScore - 1;
                 currentPower = FormState.GREEN;
-                changeForm(player, formMaterial);
+                changeForm(player, formMaterial, FormState.GREEN);
                 isShielded = false;
             }
             
@@ -150,7 +171,7 @@ public class NewBehaviourScript : MonoBehaviour
                 if (blueScore != MAX_SCORE) return;
                 blueScore = blueScore - 1;
                 currentPower = FormState.BLUE;
-                changeForm(player, formMaterial);
+                changeForm(player, formMaterial, FormState.BLUE);
             }
                 
         }
@@ -162,6 +183,17 @@ public class NewBehaviourScript : MonoBehaviour
         
     }
 
+    public void handleBluePowerActivation()
+    {
+        if (currentPower != FormState.BLUE) return;
+        if (isShielded) return;
+        isShielded=true;
+        blueScore--;
+        blueScoreText.text = "Blue Score: " + blueScore;
+    }
+
+   
+
     public void handleFormUse()
     {
         if (Input.GetKeyDown(KeyCode.Space))
@@ -169,19 +201,15 @@ public class NewBehaviourScript : MonoBehaviour
             if (currentPower == FormState.NONE) return;
             if (currentPower == FormState.RED)
             {
-                redScore--;
-                redScoreText.text = "Red Score: " + redScore;
+                handleRedPowerActivation();
             }
             if (currentPower == FormState.GREEN)
             {
-                greenScore--;
-                greenScoreText.text = "Green Score: " + greenScore;
+                handleGreenPowerActivation();
             }
             if (currentPower == FormState.BLUE)
             {
-                if (isShielded) return;
-                blueScore--;
-                blueScoreText.text = "Blue Score: " + blueScore;
+                handleBluePowerActivation();
             }
         }
     }
@@ -209,77 +237,145 @@ public class NewBehaviourScript : MonoBehaviour
         }
 
         currentPower = FormState.NONE;
-        changeForm(player, baseMaterial);
+        changeForm(player, baseMaterial, FormState.NONE);
     }
 
     public void handleKeyMovments()
     {
-        Vector3 xMovmentsVector = new Vector3(0.0f, 0.0f, 0.0f); ;
+        Debug.Log(currentLane);
+
+        Vector3 targetPosition = transform.position;
+        float speed = 20.0f;
+        if (currentLane == Lane.RIGHT)
+        {
+            targetPosition.x = rightLane.position.x;
+            transform.position = Vector3.MoveTowards(transform.position, targetPosition, speed * Time.deltaTime);
+        }
+        else if (currentLane == Lane.CENTER)
+        {
+            targetPosition.x = 0;//centerLane.position.x;
+            transform.position = Vector3.MoveTowards(transform.position, targetPosition, speed * Time.deltaTime);
+        }
+        else if (currentLane == Lane.LEFT)
+        {
+            targetPosition.x = leftLane.position.x;
+            transform.position = Vector3.MoveTowards(transform.position, targetPosition, speed * Time.deltaTime);
+        }
+
+
+
+
+        
         if (Input.GetKey(KeyCode.LeftArrow))
         {
-            if (currentLane == -1) return;
-            else if (currentLane == 0)
+            if (currentLane == Lane.LEFT) return;
+            else if (currentLane == Lane.CENTER)
             {
-                xMovmentsVector = new Vector3(leftLane.position.x, transform.position.y, transform.position.z);
-
+                currentLane = Lane.LEFT;
             }
-            else if (currentLane == 1)
+            else if (currentLane == Lane.RIGHT)
             {
-                xMovmentsVector = new Vector3(centerLane.position.x, transform.position.y, transform.position.z);
+                currentLane = Lane.CENTER;
             }
-
-            currentLane = currentLane - 1;
-            transform.position = xMovmentsVector;
-            //Vector3 moveDirection = new Vector3(xMovmentsVector, 0.0f, 0.0f);
-            //Vector3 movement = moveDirection * moveSpeed * Time.deltaTime;
-            //transform.Translate(movement);
+     
         }
         else if (Input.GetKey(KeyCode.RightArrow))
         {
-            if (currentLane == 1) return;
-            else if (currentLane == 0)
+            if (currentLane == Lane.RIGHT) return;
+            else if (currentLane == Lane.CENTER)
             {
-                xMovmentsVector = new Vector3(rightLane.position.x, transform.position.y, transform.position.z);
-
+                currentLane = Lane.RIGHT;
             }
-            else if (currentLane == -1)
+            else if (currentLane == Lane.LEFT)
             {
-                xMovmentsVector = new Vector3(centerLane.position.x, transform.position.y, transform.position.z);
+                currentLane = Lane.CENTER;
             }
 
-            currentLane = currentLane + 1;
-            transform.position = xMovmentsVector;
-            //Vector3 moveDirection = new Vector3(xMovmentsVector, 0.0f, 0.0f);
-            //Vector3 movement = moveDirection * moveSpeed * Time.deltaTime;
-            //transform.Translate(movement);
         }
     }
 
-    public void updatePowers(Material m)
+    public void updatePowers(Collider other)
     {
-        if(AreMaterialsLike(m, redMaterial))
-        { 
-            if (redScore < MAX_SCORE) redScore++;
-            redScoreText.text = "Red Score: " + redScore;
+        int scoreCounter = 0;
+        int redEnergyCounter = 0;
+        int blueEnergyCounter = 0;
+        int greenEnergyCounter = 0;
+        if (other.CompareTag("redToken"))
+        {
+            redEnergyCounter++;
+        }
+        else if (other.CompareTag("blueToken"))
+        {
+            blueEnergyCounter++;
+        }
+        else if (other.CompareTag("greenToken"))
+        {
+            greenEnergyCounter++;
+        }
+
+     
+         
+        if ((other.CompareTag("redToken") && currentPower == FormState.RED) ||
+        (other.CompareTag("blueToken") && currentPower == FormState.BLUE) ||
+        (other.CompareTag("greenToken") && currentPower == FormState.GREEN))
+        {
+            if(currentPower == FormState.GREEN)
+            {
+                scoreCounter += 10;
+                greenEnergyCounter--;
+            } else
+            {
+                scoreCounter+=2;
+            }
+        } else
+        {
+            if(currentPower == FormState.GREEN)
+            {
+                scoreCounter += 5;
+                greenEnergyCounter++;
+            }
+            else
+            {
+                scoreCounter++;
+            }
             
-        } else if(AreMaterialsLike(m, blueMaterial))
-        { 
-            if (blueScore < MAX_SCORE) blueScore++;
-            blueScoreText.text = "Blue Score: " + blueScore;    
-
-        } else if(AreMaterialsLike(m, greenMaterial))
-        {
-            if (greenScore < MAX_SCORE) greenScore++;
-            greenScoreText.text = "Green Score: " + greenScore;
         }
 
-        if (score == MAX_SCORE) return;
-        score++;
-        if((AreMaterialsLike(m, redMaterial) && currentPower == FormState.RED) || (AreMaterialsLike(m, blueMaterial) && currentPower == FormState.BLUE) || (AreMaterialsLike(m, greenMaterial) && currentPower == FormState.GREEN))
+        redScore += (redEnergyCounter * energyMultiplier);
+        if(redScore > MAX_SCORE) redScore = MAX_SCORE;
+        blueScore += (blueEnergyCounter * energyMultiplier);
+        if (blueScore > MAX_SCORE) blueScore = MAX_SCORE;
+        greenScore += (greenEnergyCounter * energyMultiplier);
+        if (greenScore > MAX_SCORE) greenScore = MAX_SCORE;
+        score += (scoreCounter * scoreMultiplier);
+
+
+        if (energyMultiplier > 1)
         {
-            score++;
+            energyMultiplier = 1;
         }
+
+        if (scoreMultiplier > 1)
+        {
+            scoreMultiplier = 1;
+        }
+
+        redScoreText.text = "Red Score: " + redScore;
+        blueScoreText.text = "Blue Score: " + blueScore;
+        greenScoreText.text = "Green Score: " + greenScore;
         scoreText.text = "Score: " + score;
+
+    }
+
+    public void deactivatePowers()
+    {
+        if(isShielded)
+        {
+           isShielded = false;
+        }
+        energyMultiplier = 1;
+        scoreMultiplier = 1;
+        changeForm(player, baseMaterial, FormState.NONE);
     }
 
     private void OnTriggerEnter(Collider other)
@@ -287,27 +383,15 @@ public class NewBehaviourScript : MonoBehaviour
         
         if (other.CompareTag("obstacle"))
         {
-            if(isShielded)
+            if(!isShielded && currentPower == FormState.NONE)
             {
-                isShielded = false;
-            } else
-            {
-                if(currentPower == FormState.NONE)
-                {
-                    isGameOn = false;
-                }
+                isGameOn = false;
             }
-            changeForm(player, baseMaterial);
-            
+            deactivatePowers();
         }
-        else if (other.CompareTag("token"))
-        {
-            Renderer otherRenderer = other.GetComponent<Renderer>();
-            if (otherRenderer != null)
-            {
-                updatePowers(otherRenderer.material); 
-            }
-        }
+
+        // handle token taking 
+        updatePowers(other);
 
         Destroy(other.gameObject);
     }
@@ -324,20 +408,19 @@ public class NewBehaviourScript : MonoBehaviour
             Renderer objectRenderer = spawnedToken.GetComponent<Renderer>();
             if (objectRenderer != null)
             {
-                objectRenderer.material = getRandomMaterial();
+                int index = 1;//Random.Range(0, 3);
+                objectRenderer.tag = getRandomTag(index);
+                objectRenderer.material = getRandomMaterial(index);
             }
 
             // render obstacles 
             Vector3 randomPositionObstacle = new Vector3(getRandomLaneAxis(), -8.7f, spawnLocation.position.z + 15.0f);
             Instantiate(obstacle, randomPositionObstacle, Quaternion.identity);
             spawnCount++;
-
-            //if (spawnCount >= numberOfSpawns)
-            //{
-            //    CancelInvoke("SpawnObject");
-            //}
         }
     }
+
+   
 
     public void handleKillingObject()
     {
@@ -374,9 +457,9 @@ public class NewBehaviourScript : MonoBehaviour
             
         } else
         {
-            GameObject tmpPlayground = playground;
+            //GameObject tmpPlayground = playground;
             playground = Instantiate(playground, new Vector3(playgroundLocation.position.x, playgroundLocation.position.y, (float) playerZPosition), Quaternion.identity);
-            Destroy(tmpPlayground);
+            //Destroy(tmpPlayground);
         }
         transform.Translate(Vector3.forward * moveSpeed * Time.deltaTime, Space.World);
 

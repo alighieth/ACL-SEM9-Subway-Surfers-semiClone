@@ -352,18 +352,23 @@ public class NewBehaviourScript : MonoBehaviour
         changeForm(player, baseMaterial, FormState.NONE);
     }
 
+    public void handleGamePauseFunctionality()
+    {
+        if (isPaused)
+        {
+            ResumeGame();
+        }
+        else
+        {
+            PauseGame();
+        }
+    }
+
     public void handleGamePause()
     {
         if (Input.GetKeyDown(KeyCode.Escape))
         {
-            if (isPaused)
-            {
-                ResumeGame();
-            }
-            else
-            {
-                PauseGame();
-            }
+            handleGamePauseFunctionality();
         }
     }
 
@@ -695,8 +700,7 @@ public class NewBehaviourScript : MonoBehaviour
         if (!GameStarted || isGameOver) return;
 
 
-        Renderer playgroundRenderer = playground.GetComponent<Renderer>();
-        //if (playgroundRenderer == null) return; 
+        Renderer playgroundRenderer = playground.GetComponent<Renderer>(); 
         Bounds playgroundBounds = playgroundRenderer.bounds;
         float playgroundMaxZ = playgroundBounds.max.z;
 
